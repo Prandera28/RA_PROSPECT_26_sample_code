@@ -19,9 +19,8 @@ R 4.5.2
 
 # How to run the code
 
-1. Clone the repository or download it as a ZIP file.
-2. Open the R scripts in the `code/` folder.
-3. Run the scripts in numerical order.
+1. Copy the full R Code Final into R V. 4.5.2
+2. Run the whole code
 
 All results are fully reproducible using the provided data.
 
