@@ -1,0 +1,1078 @@
+####################################################################################################
+########################################## SAMPLE CODE #############################################
+####################################################################################################
+
+  ### DISCLAIMER ###
+
+# The following R Code uses the source code made publicly available by the authors, both in Stata
+# and R programming language, whenever possible. Altering the code is sometimes necessary when the
+# source code does not run without an error, whenever a problem arises the comments make that clear.
+
+# The code is written with R Version 4.5.2
+
+# Set working directory in which the replication package of the paper is situated.
+# Link to replication package: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/YVUIFF 
+
+setwd("C:/Users/Expert/Desktop/Master VWL/LMU Masterarbeit/Replication")
+getwd()
+
+# Setting up library
+
+library(tidyverse)
+library(haven)
+library(ggsignif)
+install.packages("rjson")
+library(rjson)     # added this package to library to run the code without error
+
+----------------------------------------------------------------------------------------------------
+  
+  ##### RAW DATA CLEANING #####
+
+### Provided in Stata Code originally, so here a translation to R is provided. The working data sets
+### are also available in the replication package of the authors - so a good opportunity to see if
+### the same data sets can be obtained via the provided Stata Code - starting from the raw data sets.
+
+## Load Stata dataset for Experiment 1 ##
+
+data <- read_dta(file = file.choose()) # choose file "defund-sender-deidentified.dta" manually if needed
+data <- read_dta("data/raw/defund-sender-deidentified.dta")
+
+# Classify private support
+data$join <- ifelse(data$defunding_opposition == "Yes", 1, 0)
+
+# Drop pre-randomization attritters and flag post-randomization attriters
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+data$attrit <- ifelse(data$defunding_opposition == "" | 
+                        (data$defunding_opposition == "Yes" & data$post == ""), 1, 0)
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+data$posted <- data$post
+data$post <- NULL
+
+data$excuse <- ifelse(data$condition == "excuse", 1, 0)
+data$noexcuse <- ifelse(data$condition == "noexcuse", 1, 0)
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- ifelse(data$party == "Independent", 1, 0)
+data$party <- NULL
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+data$liberal <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+
+data$hisp <- ifelse(data$hispanic == "Yes", 1, 0)
+data$hispanic <- NULL
+
+data$male <- ifelse(data$sex == "Male", 1, 0)
+data$sex <- NULL
+
+data$white <- ifelse(data$race == "Caucasian/White", 1, 0)
+
+# Keep selected variables
+Data_Exp1_rep <- data[, c("attrit", "join", "posted", "excuse", 
+                          "noexcuse", "education", "race", "ind", "partisan", 
+                          "age", "age2", "hisp", "male", "white")]
+
+Data_Exp1_work <- read_dta("data/working/defund-sender.dta")
+
+# Both data sets are identical.
+
+
+## Load Stata data set for Experiment 1R ##
+
+data <- read_dta("data/raw/defund-sender-replication-deidentified.dta")
+
+# Classify private support
+data$join <- data$defunding_opposition == "Yes"
+
+# Drop pre-randomization attritters and flag post-randomization attriters condition: excuse or noexcuse
+data$attrit <- ifelse(data$misleading == "", 1, 0)
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+
+data$posted <- data$post
+data$post <- NULL
+
+data$excuse <- data$condition == "excuse"
+data$noexcuse <- data$condition == "noexcuse"
+data$condition <- NULL
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+
+names(data)[which(names(data) == "misleading")] <- "misleading_temp"
+data$misleading <- data$misleading_temp == "Yes"
+data$misleading_temp <- NULL
+data$a <- data$`open_misleading ` # name of "open_misleading" created some problems
+names(data)[which(names(data) == "a")] <- "open_misleading"
+data$`open_misleading ` <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+data$hisp <- data$hispanic == "Yes"
+data$hispanic <- NULL
+data$male <- data$sex == "Male"
+data$sex <- NULL
+
+data$white <- data$race == "Caucasian/White"
+
+data$num_follower_bin <- NA
+data$num_follower_bin[data$followers %in% c("0 followers", "1-10 followers", "11-25 followers")] <- 1
+data$num_follower_bin[data$followers %in% c("26-50 followers", "51 followers-100 followers")] <- 2
+data$num_follower_bin[data$followers %in% c("101 to 500 followers", "501 to 1000 followers", "1001+ followers")] <- 3
+
+data$perc_audi <- NA
+data$perc_audi[data$defundoppose %in% c("0-10%", "10-30%")] <- 1
+data$perc_audi[data$defundoppose %in% c("30-50%", "50-70%")] <- 2
+data$perc_audi[data$defundoppose %in% c("70-90%", "90-100%")] <- 3
+
+# Keep selected variables
+Data_Exp1R_rep <- subset(data, select = c("attrit", "join", "race", "defundoppose", "followers",
+                                          "posted", "excuse", "noexcuse", 
+                                          "education", "white", "partisan", "age", "age2", 
+                                          "hisp", "male", "misleading", 
+                                          "open_misleading", "num_follower_bin", 
+                                          "perc_audi")) 
+
+# Compare data set with working dataset
+Data_Exp1R_work <- read_dta("data/working/defund-sender-replication.dta")
+
+# Both data sets are the same. 
+
+
+## Load Stata data for Exp. 2
+
+data <- read_dta("data/raw/defund-receiver-deidentified.dta")
+
+# Drop pre-randomization attritters and flag post-randomization attriters
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+
+data$attrit <- ifelse(data$donation == "NA" | data$q212 == "NA", 1, 0)
+
+data$excuse <- ifelse(data$condition == "excuse", 1, 0)
+data$noexcuse <- ifelse(data$condition == "noexcuse", 1, 0)
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- ifelse(data$party == "Independent", 1, 0)
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+data$liberal <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+
+data$hisp <- ifelse(data$hispanic == "Yes", 1, 0)
+data$hispanic <- NULL
+
+data$male <- ifelse(data$sex == "Male", 1, 0)
+
+data$sex <- NULL
+
+data$white <- ifelse(data$race == "Caucasian/White", 1, 0)
+
+data$believe_donated <- ifelse(grepl("Yes", data$q212), 1, 0)
+
+data$bonus <- ifelse(grepl("Yes", data$donation), 1, 0)
+
+Data_Exp2_rep <- data[, c("attrit", "male", "education", "hisp",
+                          "white", "race", "age", "age2", "partisan", "openended",
+                          "believe_donated", "bonus",
+                          "excuse", "noexcuse", "ind")]
+
+# Compare replicated data with working data
+Data_Exp2_work <- read_dta("data/working/defund-receiver.dta")
+
+# Data sets exactly the same.
+
+
+## Load Stata data for Experiment 3
+
+data <- read_dta("data/raw/deport-sender-deidentified.dta")
+
+# Classify private support
+data$join <- data$border_support == "Yes"
+
+# Drop pre-randomization attriters and flag post-randomization attriters
+data$attrit <- ifelse(data$border_support == "" | (data$border_support == "Yes" & is.na(data$post)), 1, 0)
+data$attention <- data$screener == "Extremely interested,Not at all interested"
+data <- subset(data, attention)
+data$attention <- NULL
+data$screener <- NULL
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+
+data$posted <- data$post
+data$post <- NULL
+
+data$excuse <- data$condition == "excuse"
+data$noexcuse <- data$condition == "noexcuse"
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- data$party == "Independent"
+data$party <- NULL
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+data$hisp <- data$hispanic == "Yes"
+data$hispanic <- NULL
+data$male <- data$sex == "Male"
+data$sex <- NULL
+
+data$white <- data$race == "Caucasian/White"
+
+# Keep selected variables
+Data_Exp3_rep <- subset(data, select = c("attrit", "join", "posted", "race", "ind",
+                                         "excuse", "noexcuse", "education", "white", "partisan",
+                                         "age", "age2", "hisp", "male"))
+
+# Compare with working data set for Exp 3
+Data_Exp3_work <- read_dta("data/working/deport-sender.dta")
+
+# Both data sets are the same. However, FALSE statements in replicated data set are displayed
+# as 0 in working data set, but that is just a difference in naming which is not important.
+
+
+## Load Stata data for Experiment 4
+
+data <- read_dta("data/raw/deport-receiver-deidentified.dta")
+
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+
+data$attrit <- ifelse(data$donation == "NA" | data$q212 == "NA", 1, 0)
+
+data$excuse <- ifelse(data$condition == "excuse", 1, 0)
+data$noexcuse <- ifelse(data$condition == "noexcuse", 1, 0)
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- ifelse(data$party == "Independent", 1, 0)
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+data$liberal <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+
+data$hisp <- ifelse(data$hispanic == "Yes", 1, 0)
+data$hispanic <- NULL
+
+data$male <- ifelse(data$sex == "Male", 1, 0)
+
+data$sex <- NULL
+
+data$white <- ifelse(data$race == "Caucasian/White", 1, 0)
+
+data$believe_donated <- ifelse(grepl("Yes", data$q212), 1, 0)
+
+data$bonus <- ifelse(grepl("Yes", data$donation), 1, 0)
+
+Data_Exp4_rep <- data[, c("attrit", "male", "education", "hisp",
+                          "white", "race", "age", "age2", "partisan", "openended",
+                          "believe_donated", "bonus",
+                          "excuse", "noexcuse", "ind")]
+
+# Compare with working data set from Exp. 4
+Data_Exp4_work <- read_dta("data/working/deport-receiver.dta")
+
+# Both are exactly the same.
+
+
+## Load Stata data from Aux. Experiment 2 
+
+data <- read_dta("data/raw/rainforest-sender-deidentified.dta")
+
+# Classify private support
+data$join <- data$join_campaign == "Yes"
+
+# Drop pre-randomization attriters and flag post-randomization attriters
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+
+data$attrit <- ifelse(data$join_campaign == "" | (data$join_campaign == "Yes" & is.na(data$post)), 1, 0)
+
+data$attention <- data$screener == "Extremely interested,Not at all interested"
+data <- subset(data, attention)
+data$attention <- NULL
+data$screener <- NULL
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+
+data$posted <- data$post
+data$post <- NULL
+
+data$excuse <- data$condition == "excuse"
+data$noexcuse <- data$condition == "noexcuse"
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- data$party == "Independent"
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+data$hisp <- data$hispanic == "Yes"
+data$hispanic <- NULL
+data$male <- data$sex == "Male"
+data$sex <- NULL
+
+data$white <- data$race == "Caucasian/White"
+
+# Keep selected variables
+Data_Aux_Exp2_rep <- subset(data, select = c("attrit", "join", "posted", "excuse", "noexcuse", "education", 
+                                             "white", "partisan", "age", "age2", "hisp", "male", "race",
+                                             "party", "ind"))
+
+# Compare replicated data set to working data set of authors.
+Data_Aux_Exp2_work <- read_dta("data/working/rainforest-sender.dta")
+
+# Both data sets equivalent.
+
+
+## Load Stata data set for Aux. Experiment 3
+
+data <- read_dta("data/raw/daylight-sender-deidentified.dta")
+
+# Classify private support
+data$join <- data$daylight_opposition == "Yes"
+
+data$attrit <- ifelse(data$misleading == "", 1, 0)
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+
+data$posted <- data$post
+data$post <- NULL
+
+data$excuse <- data$condition == "excuse"
+data$noexcuse <- data$condition == "noexcuse"
+data$condition <- NULL
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+
+names(data)[which(names(data) == "misleading")] <- "misleading_temp"
+data$misleading <- data$misleading_temp == "Yes"
+data$misleading_temp <- NULL
+data$a <- data$`open_misleading `
+names(data)[which(names(data) == "a")] <- "open_misleading"
+data$`open_misleading ` <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+data$age2 <- data$age^2
+data$hisp <- data$hispanic == "Yes"
+data$hispanic <- NULL
+data$male <- data$sex == "Male"
+data$sex <- NULL
+
+data$white <- data$race == "Caucasian/White"
+
+# Recode multiple choice variables and compute score
+mc_vars <- grep("^mc_", names(data), value = TRUE)
+for (mc_var in mc_vars) {
+  data[[mc_var]] <- ifelse(data[[mc_var]] == "Agree", 1, 0)
+}
+
+data$mc_score <- -(data$mc_1 + data$mc_2 + data$mc_3 + data$mc_4 - data$mc_5 + 
+                     data$mc_6 - data$mc_7 + data$mc_8 - data$mc_9 - data$mc_10 + 
+                     data$mc_11 + data$mc_12 + data$mc_13)
+
+
+# Keep selected variables
+Data_Aux_Exp3_rep <- subset(data, select = c("join", "posted", "excuse", "noexcuse", "education",
+                                             "white", "partisan", "age", "age2", "hisp", "male", 
+                                             "misleading", "open_misleading", "mc_score", "attention", 
+                                             "party", "attrit", "race"))
+
+# Compare replicated data set with working data set
+Data_Aux_Exp3_work <- read_dta("data/working/daylight-sender.dta")
+
+# Both are exactly the same.
+
+
+## Load Stata data for Aux. Experiment 4
+
+data <- read_dta("data/raw/anticipated-persuasion-deidentified.dta")
+
+# Classify private support
+data$join <- ifelse(data$defunding_opposition == "Yes", TRUE, FALSE)
+data <- subset(data, join == TRUE)
+
+# Drop pre-randomization attritters and flag post-randomization attriters
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+data$attrit <- ifelse(data$defunding_opposition == "" | 
+                        (data$defunding_opposition == "Yes" & is.na(data$percentage_4)), 1, 0)
+
+# Drop attention variable
+data <- subset(data, screener == "Extremely interested,Not at all interested")
+data <- subset(data, select = -c(attention, screener))
+
+# Generate outcome and treatment variables
+data$percentage <- as.numeric(as.character(data$percentage_4))
+data$excuse <- ifelse(data$condition == "excuse", TRUE, FALSE)
+data$noexcuse <- ifelse(data$condition == "noexcuse", TRUE, FALSE)
+data <- subset(data, select = -condition)
+
+# Generate demographic and control variables
+data$ind <- ifelse(data$party == "Independent", TRUE, FALSE)
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+data$age <- 2021 - as.numeric(data$year)
+data$age2 <- data$age^2
+data$hisp <- ifelse(data$hispanic == "Yes", TRUE, FALSE)
+data$male <- ifelse(data$sex == "Male", TRUE, FALSE)
+data$white <- ifelse(data$race == "Caucasian/White", TRUE, FALSE)
+data <- subset(data, select = -c(party, liberal, year, hispanic, sex))
+
+# Keep selected variables
+Data_Aux_Exp4_rep <- subset(data, select = c(attrit, percentage, excuse, noexcuse, education, race, ind, partisan,
+                                             age, age2, hisp, male, white))
+
+# Compare with working data set
+Data_Aux_Exp4_work <- read_dta("data/working/anticipated-persuasion.dta")
+
+# Data sets exactly the same.
+
+
+## Load Stata data for Aux. Experiment 5
+
+library(stringr)
+
+data <- read_dta("data/raw/defund-openended-deidentified.dta")
+
+# Define function to clean strings
+clean_string <- function(x) {
+  x <- tolower(x)
+  x <- str_replace_all(x, "\\u00a0|\\u0080|\\u0093|\\u0096|\\u00a5|\\u00a6|\\u00b8|\\u00c2|\\u00c3|\\u00e2|\\u017f", "")
+  x <- str_trim(x)
+  return(x)
+}
+
+# Clean 'hand_coding' variable
+data$handcoding <- clean_string(data$hand_coding)
+
+# Replace misspelled words
+data$handcoding <- str_replace(data$handcoding, "persasion", "persuasion")
+data$handcoding <- str_replace(data$handcoding, "rationale,persuasion", "rationale, persuasion")
+
+# Generate demographic and control variables
+data$ind <- data$party == "Independent"
+data$partisan <- case_when(
+  data$liberal == "Very conservative" ~ 2,
+  data$liberal == "Conservative" ~ 1,
+  data$liberal == "Neither liberal nor conservative" ~ 0,
+  data$liberal == "Liberal" ~ -1,
+  data$liberal == "Very liberal" ~ -2
+)
+data$year <- as.numeric(data$year)
+data$age <- 2021 - data$year
+data$age2 <- data$age^2
+data$hisp <- data$hispanic == "Yes"
+data$male <- data$sex == "Male"
+data$education <- data$education
+data$white <- data$race == "Caucasian/White"
+
+# Keep selected variables
+Data_Aux_Exp5_rep <- data
+
+# Compare data sets
+Data_Aux_Exp5_work <- read_dta("data/working/defund-openended.dta")
+
+# Exactly the same.
+
+
+## Load Stata data for Aux. Experiment 6
+
+data <- read_dta("data/raw/defund-hypothetical-deidentified.dta")
+
+# Classify private support
+data$join <- ifelse(data$defunding_opposition == "Yes", TRUE, FALSE)
+
+# Drop pre-randomization attritters and flag post-randomization attriters, condition: excuse or noexcuse
+data <- data[data$condition %in% c("excuse", "noexcuse"), ]
+data$attrit <- ifelse(data$defunding_opposition == "" | (data$defunding_opposition == "Yes" & data$post == ""), 1, 0)
+
+# Generate outcome and treatment variables
+data$post[which(data$post == "")] <- NA
+data$post[which(data$post == "Yes")] <- 1
+data$post[which(data$post == "No")] <- 0
+
+data$posted <- as.numeric(data$post)
+data$post <- NULL
+
+data$excuse <- data$condition == "excuse"
+data$noexcuse <- data$condition == "noexcuse"
+
+# Generate demographic and control variables
+data$ind <- data$party == "Independent"
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+
+data$year <- as.numeric(as.character(data$year))
+data$age <- 2022 - data$year
+data$age2 <- data$age^2
+
+data$hisp <- data$hispanic == "Yes"
+
+data$male <- data$sex == "Male"
+
+data$white <- data$race == "Caucasian/White"
+
+data$sob <- as.numeric(as.character(data$sob_1))
+
+# Keep selected variables
+data$post <- NULL
+Data_Aux_Exp6_rep <- data
+
+# Compare with working data set
+Data_Aux_Exp6_work <- read_dta("data/working/defund-hypothetical.dta")
+
+# Both data sets are nearly the same, but the working data set doesn't contain the following variables:
+# ind, partisan, age, age2, hisp, male, white, sob, and condition. 
+# Therefore these nine variables are deleted from the replication data set.
+
+Data_Aux_Exp6_rep <- subset(Data_Aux_Exp6_rep, select = -c(ind, partisan, age, age2, hisp, male,
+                                                           white, sob, condition))
+
+# Note that the "posted" variable is not identical for both data sets. The working data set actually
+# has not a single zero value in it, only 1's and NA's. The working data set is therefore likely to
+# be faulty.
+
+
+## Load Stata data for Aux. Experiment 7
+
+data <- read_dta("data/raw/defund-nocredible-receiver-deidentified.dta")
+
+# Drop pre-randomization attritters and flag post-randomization attriters
+data <- subset(data, condition %in% c("excuse", "noexcuse"))
+
+data$attrit <- ifelse(data$donation == "NA" | data$q212 == "NA", 1, 0)
+
+data$excuse <- ifelse(data$condition == "excuse", 1, 0)
+data$noexcuse <- ifelse(data$condition == "noexcuse", 1, 0)
+data$condition <- NULL
+
+# Generate demographic and control variables
+data$ind <- ifelse(data$party == "Independent", 1, 0)
+
+data$partisan <- NA
+data$partisan[data$liberal == "Very conservative"] <- 2
+data$partisan[data$liberal == "Conservative"] <- 1
+data$partisan[data$liberal == "Neither liberal nor conservative"] <- 0
+data$partisan[data$liberal == "Liberal"] <- -1
+data$partisan[data$liberal == "Very liberal"] <- -2
+data$liberal <- NULL
+
+data$age <- 2021 - as.numeric(data$year)
+data$year <- NULL
+
+data$age2 <- data$age^2
+
+data$hisp <- ifelse(data$hispanic == "Yes", 1, 0)
+data$hispanic <- NULL
+
+data$male <- ifelse(data$sex == "Male", 1, 0)
+
+data$sex <- NULL
+
+data$white <- ifelse(data$race == "Caucasian/White", 1, 0)
+
+data$believe_donated <- ifelse(grepl("Yes", data$q212), 1, 0)
+
+data$bonus <- ifelse(grepl("Yes", data$donation), 1, 0)
+
+Data_Aux_Exp7_rep <- data[, c("attrit", "male", "education", "hisp",
+                              "white", "race", "age", "age2", "partisan", "openended",
+                              "believe_donated", "bonus",
+                              "excuse", "noexcuse", "ind")]
+
+# Compare replicated data with working data
+Data_Aux_Exp7_work <- read_dta("data/working/defund-nocredible-receiver.dta")
+
+# Both are the same.
+
+
+######################################### INDEPENTENT ROBUSTNESS CHECKS ############################
+
+### POWER CALCULATIONS
+
+# The following section introduces calculations to figure out which sample sizes would be needed to
+# find a minimal detectable effect (MDE) and vice-versa.
+# The Power level Pi is set to 80%, type I error alpha is 5%, and proportion treated 50%.
+# Given sample size, how large has MDE to be to achieve power Pi? The sample sizes will be set on 
+# the basis of size given in Table B.1 in the Appendix of Justifying Dissent.
+
+# To obtain the results for the power calculations the formula shown in the paper in section 4.3 will
+# be used. To check if the results are correct, another source will be used to calculate the MDE. This
+# source is the poverty action lab, here the link: https://www.povertyactionlab.org/resource/power-calculations
+# The values shown in the thesis will be the values obtained from the formula in 4.3.
+
+## Experiment 1
+
+sd(Data_Exp1_rep$excuse, na.rm = TRUE) # balanced treatment allocation
+
+# based on a simple formula
+(0.84 + 1.96)*sqrt((1/0.25)*(sd(Data_Exp1_rep$posted, na.rm = TRUE)^2)/523)
+
+# based on recommendations of J-PAL on https://github.com/J-PAL/Sample_Size_and_Power
+power = 0.8                 # SPECIFY - desired power
+nratio = 1                  # SPECIFY - the ratio of the size of the treatment group to control group
+alpha =0.05                 # SPECIFY - significance level
+p = nratio/(1+nratio)
+
+mde_base_Exp_1 <- function (dataset = Data_Exp1_rep, outcome = posted, treatment = excuse, N){
+  t_power = qt(power, df=N-2)
+  t_alpha = qt(1-alpha/2, df=N-2)
+  
+  baseline_sd <- sd(outcome, na.rm = TRUE) #Record the standard deviation of the outcome variable at baseline   
+  
+  mde <- (t_power + t_alpha) * sqrt(1 /(p*(1-p))) * sqrt(1 / N) * baseline_sd
+  #mde = round(mde, digits=2)
+  print(mde)
+  
+  cat("Given our sample size of",N,
+      "and ratio of treatment and control group as,",
+      nratio, ",the effect needs to be higher than", 
+      mde, "for us to detect it with a probability of",power)
+  
+  return(mde)
+  
+}
+
+mde_Exp_1 <- mde_base_Exp_1(Data_Exp1_rep, Data_Exp1_rep$posted, Data_Exp1_rep$excuse, N = 523)
+
+# Sample size of the concerned data set big enough to detect the effect uncovered in paper
+
+## Experiment 1R
+
+(0.84 + 1.96)*sqrt((1/0.25)*(sd(Data_Exp1R_rep$posted, na.rm = TRUE)^2)/535)
+
+mde_base_Exp_1R <- function (dataset = Data_Exp1R_rep, outcome = posted, treatment = excuse, N){
+  t_power = qt(power, df=N-2)
+  t_alpha = qt(1-alpha/2, df=N-2)
+  
+  baseline_sd <- sd(outcome, na.rm = TRUE) #Record the standard deviation of the outcome variable at baseline   
+  
+  mde <- (t_power + t_alpha) * sqrt(1 /(p*(1-p))) * sqrt(1 / N) * baseline_sd
+  #mde = round(mde, digits=2)
+  print(mde)
+  
+  cat("Given our sample size of",N,
+      "and ratio of treatment and control group as,",
+      nratio, ",the effect needs to be higher than", 
+      mde, "for us to detect it with a probability of",power)
+  
+  return(mde)
+  
+}
+
+mde_Exp_1R <- mde_base_Exp_1R(Data_Exp1R_rep, Data_Exp1R_rep$posted, Data_Exp1R_rep$excuse, N = 535)
+
+# Sample size of 605, based on this calculation, would not have been deemed sufficient to find
+# a significant treatment effect, but it turned out to be significant
+
+## Experiment 2
+
+sd(Data_Exp2_rep$bonus, na.rm = TRUE)
+
+(0.84 + 1.96)*sqrt((1/0.25)*(sd(Data_Exp2_rep$bonus, na.rm = TRUE)^2)/1040)
+
+mde_base_Exp_2 <- function (dataset = Data_Exp2_rep, outcome = bonus, treatment = excuse, N){
+  t_power = qt(power, df=N-2)
+  t_alpha = qt(1-alpha/2, df=N-2)
+  
+  baseline_sd <- sd(outcome, na.rm = TRUE) #Record the standard deviation of the outcome variable at baseline   
+  
+  mde <- (t_power + t_alpha) * sqrt(1 /(p*(1-p))) * sqrt(1 / N) * baseline_sd
+  #mde = round(mde, digits=2)
+  print(mde)
+  
+  cat("Given our sample size of",N,
+      "and ratio of treatment and control group as,",
+      nratio, ",the effect needs to be higher than", 
+      mde, "for us to detect it with a probability of",power)
+  
+  return(mde)
+  
+}
+
+mde_Exp_2 <- mde_base_Exp_2(Data_Exp2_rep, Data_Exp2_rep$bonus, Data_Exp2_rep$excuse, N = 1040)
+
+# The sample size would not have been deemed high enough to detect the treatment effect of -0.074.
+# Note that the treatment effect is negative, however the power calculation yields values on 
+# absolute magnitude.
+
+## Experiment 3
+
+sd(Data_Exp3_rep$posted, na.rm = TRUE)
+
+(0.84 + 1.96)*sqrt((1/0.25)*(sd(Data_Exp3_rep$posted, na.rm = TRUE)^2)/508)
+
+mde_base_Exp_3 <- function (dataset = Data_Exp3_rep, outcome = posted, treatment = excuse, N){
+  t_power = qt(power, df=N-2)
+  t_alpha = qt(1-alpha/2, df=N-2)
+  
+  baseline_sd <- sd(outcome, na.rm = TRUE) #Record the standard deviation of the outcome variable at baseline   
+  
+  mde <- (t_power + t_alpha) * sqrt(1 /(p*(1-p))) * sqrt(1 / N) * baseline_sd
+  #mde = round(mde, digits=2)
+  print(mde)
+  
+  cat("Given our sample size of",N,
+      "and ratio of treatment and control group as,",
+      nratio, ",the effect needs to be higher than", 
+      mde, "for us to detect it with a probability of",power)
+  
+  return(mde)
+  
+}
+
+mde_Exp_3 <- mde_base_Exp_3(Data_Exp3_rep, Data_Exp3_rep$posted, Data_Exp3_rep$excuse, N = 508)
+
+# The sample size used in the paper is more than enough as the effect discovered is 0.172.
+
+## Experiment 4
+
+sd(Data_Exp4_rep$bonus, na.rm = TRUE)
+
+# The standard deviation suggests that after removing NAs treatment group is noticeably smaller
+# than the control group. This is bad for econometric power.
+
+(0.84 + 1.96)*sqrt((1/0.25)*(sd(Data_Exp4_rep$bonus, na.rm = TRUE)^2)/1082)
+
+mde_base_Exp_4 <- function (dataset = Data_Exp4_rep, outcome = bonus, treatment = excuse, N){
+  t_power = qt(power, df=N-2)
+  t_alpha = qt(1-alpha/2, df=N-2)
+  
+  baseline_sd <- sd(outcome, na.rm = TRUE) #Record the standard deviation of the outcome variable at baseline   
+  
+  mde <- (t_power + t_alpha) * sqrt(1 /(p*(1-p))) * sqrt(1 / N) * baseline_sd
+  #mde = round(mde, digits=2)
+  print(mde)
+  
+  cat("Given our sample size of",N,
+      "and ratio of treatment and control group as,",
+      nratio, ",the effect needs to be higher than", 
+      mde, "for us to detect it with a probability of",power)
+  
+  return(mde)
+  
+}
+
+mde_Exp_4 <- mde_base_Exp_4(Data_Exp4_rep, Data_Exp4_rep$bonus, Data_Exp4_rep$excuse, N = 1082)
+
+# The sample size used in the Experiment 4 would have been deemed to small to detect a value of
+# -0.064.
+
+
+### Model Specification Checks
+
+## Add and remove control variables
+
+# Check whether adding or removing other variables change the main coefficient attached to the
+# excuse condition - which is the treatment. The scope of this analysis is fundamentally quite
+# limited due to the unavailability of additional data because of the experimental context.
+
+# add partisan
+model_1a <- lm(posted ~ excuse+age+I(age^2)+race+hisp+male+education+partisan, data = Data_Exp1_rep)
+summary(model_1a) # no noticeably change for coefficient
+
+# add partisan and remove male
+model_1b <- lm(posted ~ excuse+age+I(age^2)+race+hisp+education+partisan, data = Data_Exp1_rep)
+summary(model_1b) # coefficient on excuse condition drops under 0.12 
+
+# add partisan and remove age
+model_1c <- lm(posted ~ excuse+race+hisp+education+male+partisan, data = Data_Exp1_rep)
+summary(model_1c) # coefficient on excuse same as always
+
+# add partisan and remove both age and male
+model_1d <- lm(posted ~ excuse+race+hisp+education+partisan, data = Data_Exp1_rep)
+summary(model_1d) # coefficient on excuse same as always
+
+# For Experiment 1 adding/removing variables doesn't have any noteworthy effect
+
+
+# add partisan
+model_1Ra <- lm(posted ~ excuse+age+I(age^2)+race+hisp+male+education+partisan, data = Data_Exp1R_rep)
+summary(model_1Ra) # no noticeably change for coefficient
+
+# add partisan and remove male
+model_1Rb <- lm(posted ~ excuse+age+I(age^2)+race+hisp+education+partisan, data = Data_Exp1R_rep)
+summary(model_1Rb) # no noticeable change for coefficient
+
+# add partisan and remove age
+model_1Rc <- lm(posted ~ excuse+race+hisp+education+male+partisan, data = Data_Exp1R_rep)
+summary(model_1Rc) # coefficient on excuse condition didn't change much
+
+# add partisan and remove both age and male
+model_1Rd <- lm(posted ~ excuse+race+hisp+education+partisan, data = Data_Exp1R_rep)
+summary(model_1Rd) # coefficient on excuse same as always
+
+# For Experiment 1R adding/removing variables doesn't have any noteworthy effect
+
+
+# add partisan 
+model_2a <- lm(bonus ~ excuse+age+I(age^2)+race+hisp+male+education+partisan,data = Data_Exp2_rep)
+summary(model_2a) # coefficient on cover a bit lower than in replication, coeff of partisan ***
+
+# add partisan and remove male
+model_2b <- lm(bonus ~ excuse+age+I(age^2)+race+hisp+education+partisan ,data = Data_Exp2_rep)
+summary(model_2b) # coefficient on cover a bit lower
+
+# add partisan and remove age
+model_2c <- lm(bonus ~ excuse+race+hisp+male+education+partisan ,data = Data_Exp2_rep)
+summary(model_2c) # coefficient on cover a bit lower
+
+# add partisan and remove age and male
+model_2d <- lm(bonus ~ excuse+race+hisp+education+partisan ,data = Data_Exp2_rep)
+summary(model_2d) # coefficient on cover a bit lower
+
+# For Experiment 2 adding partisan (-2 very liberal until 2 very conservative) highly important 
+# variable. Including it moves the coefficient further downwards - into an area where the power
+# calculations would certainly not have concluded that the sample size is enough to detect such
+# a small effect. However the cover coefficient should be negative from what is known from the
+# main results.
+
+
+# add partisan, will use working data set here because variables in rep data set not all numerical
+model_3a <- lm(posted ~ excuse+age+I(age^2)+race+hisp+male+education+partisan, data = Data_Exp3_work)
+summary(model_3a)
+
+# For Experiment 3 adding partisan won't matter. From regression output it is unlikely that removing
+# male and age will yield any different results.
+
+
+# add partisan
+model_4a <- lm(bonus ~ excuse+age+I(age^2)+race+hisp+male+education+partisan,data = Data_Exp4_rep)
+summary(model_4a) 
+
+# For Experiment 4 adding the partisan variable changes the cover coefficient a bit. What seems
+# striking is that the coefficient of excuse is not estimated to be negative, unlike in the main
+# results and replication of Justifying Dissent.
+
+
+### Subsample Analysis
+
+# Difficult task statistically due to dividing the sample even further, making sample size even
+# smaller than it already is.
+
+# The original paper already did subsample analysis for various key variables such as twitter
+# follower amount, partisanship, gender, race. What is not covered already is Experiment 2 and 4
+# regarding age, gender, education and race. 
+
+## HTE Experiment 2
+
+Exp2_index_male <- which(Data_Exp2_rep$male == 1)
+Exp2_index_female <- which(Data_Exp2_rep$male == 0)
+which(Data_Exp2_rep[Exp2_index_male,]$male == 0) # subsetting worked
+
+model_Exp_2_male <- lm(data = Data_Exp2_rep[Exp2_index_male,], formula = bonus ~ excuse+age+I(age^2)+race+hisp+education+partisan)
+summary(model_Exp_2_male)
+
+model_Exp_2_female <- lm(data = Data_Exp2_rep[Exp2_index_female,], formula = bonus ~ excuse+age+I(age^2)+race+hisp+education+partisan)
+summary(model_Exp_2_female)
+
+# based on gender there is little heterogeneity for Experiment 2
+
+Data_Exp2_rep_age <- Data_Exp2_rep %>%
+  mutate(age_category = case_when(
+    age < 25 ~ "below 25",
+    age >= 25 & age <= 40 ~ "25-40",
+    age > 40 & age <= 60 ~ "41-60",
+    age > 60 ~ "over 60"
+  ))
+
+Data_Exp2_rep_below_25 <- Data_Exp2_rep_age %>% filter(age_category == "below 25")
+Data_Exp2_rep_age_25_40 <- Data_Exp2_rep_age %>% filter(age_category == "25-40")
+Data_Exp2_rep_age_41_60 <- Data_Exp2_rep_age %>% filter(age_category == "41-60")
+Data_Exp2_rep_over_60 <- Data_Exp2_rep_age %>% filter(age_category == "over 60")
+
+model_Exp_2_below_25 <- lm(data = Data_Exp2_rep_below_25, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_2_below_25)
+model_Exp_2_age_25_40 <- lm(data = Data_Exp2_rep_age_25_40, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_2_age_25_40)
+model_Exp_2_age_41_60 <- lm(data = Data_Exp2_rep_age_41_60, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_2_age_41_60) # excuse coefficient here very low
+model_Exp_2_age_over_60 <- lm(data = Data_Exp2_rep_over_60, bonus ~ excuse+male+race+hisp+education+partisan) 
+summary(model_Exp_2_age_over_60)
+
+# results suggest there is some heterogeneity based on age, most noticeably for 41-60 years old
+
+Exp2_index_white <- which(Data_Exp2_rep$white == 1)
+Exp2_index_non_white <- which(Data_Exp2_rep$white == 0)
+
+model_Exp_2_white <- lm(data = Data_Exp2_rep[Exp2_index_white,], formula = bonus ~ excuse+age+I(age^2)+male+education+partisan)
+summary(model_Exp_2_white)
+
+model_Exp_2_non_white <- lm(data = Data_Exp2_rep[Exp2_index_non_white,], formula = bonus ~ excuse+age+I(age^2)+male+education+partisan)
+summary(model_Exp_2_non_white)
+
+# The excuse coefficient on whites is considerably lower, suggesting some notion of heterogeneity.
+
+Data_Exp2_rep$academic <- 0
+
+which(Data_Exp2_rep$education == "Bachelor's degree in college (4-year)")
+which(Data_Exp2_rep$education == "Master's degree")
+which(Data_Exp2_rep$education == "Doctoral degree")
+
+Data_Exp2_rep$academic[which(Data_Exp2_rep$education == "Bachelor's degree in college (4-year)")] <- 1
+Data_Exp2_rep$academic[which(Data_Exp2_rep$education == "Master's degree")] <- 1
+Data_Exp2_rep$academic[which(Data_Exp2_rep$education == "Doctoral degree")] <- 1
+
+Exp_2_index_academic <- which(Data_Exp2_rep$academic == 1)
+Exp_2_index_non_academic <- which(Data_Exp2_rep$academic == 0)
+
+model_Exp_2_academic <- lm(data = Data_Exp2_rep[Exp_2_index_academic,], formula = bonus ~ excuse+age+I(age^2)+male+race+hisp+partisan)
+summary(model_Exp_2_academic)
+
+model_Exp_2_non_academic <- lm(data = Data_Exp2_rep[Exp_2_index_non_academic,], formula = bonus ~ excuse+age+I(age^2)+male+race+hisp+partisan)
+summary(model_Exp_2_non_academic)
+
+# Excuse coefficient higher for the non academic people.
+
+## HTE Experiment 4
+
+Exp4_index_male <- which(Data_Exp4_rep$male == 1)
+Exp4_index_female <- which(Data_Exp4_rep$male == 0)
+which(Data_Exp4_rep[Exp4_index_male,]$male == 0) # subsetting worked
+
+model_Exp_4_male <- lm(data = Data_Exp4_rep[Exp4_index_male,], formula = bonus ~ excuse+age+I(age^2)+race+hisp+education+partisan)
+summary(model_Exp_4_male)
+
+model_Exp_4_female <- lm(data = Data_Exp4_rep[Exp4_index_female,], formula = bonus ~ excuse+age+I(age^2)+race+hisp+education+partisan)
+summary(model_Exp_4_female) # excuse coefficient here nearly 10 times bigger than for males
+
+# Based on the result women more likely to authorize the bonus payment.
+
+Data_Exp4_rep_age <- Data_Exp4_rep %>%
+  mutate(age_category = case_when(
+    age < 25 ~ "below 25",
+    age >= 25 & age <= 40 ~ "25-40",
+    age > 40 & age <= 60 ~ "41-60",
+    age > 60 ~ "over 60"
+  ))
+
+Data_Exp4_rep_below_25 <- Data_Exp4_rep_age %>% filter(age_category == "below 25")
+Data_Exp4_rep_age_25_40 <- Data_Exp4_rep_age %>% filter(age_category == "25-40")
+Data_Exp4_rep_age_41_60 <- Data_Exp4_rep_age %>% filter(age_category == "41-60")
+Data_Exp4_rep_over_60 <- Data_Exp4_rep_age %>% filter(age_category == "over 60")
+
+model_Exp_4_below_25 <- lm(data = Data_Exp4_rep_below_25, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_4_below_25) # excuse coefficient here very low
+model_Exp_4_age_25_40 <- lm(data = Data_Exp4_rep_age_25_40, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_4_age_25_40)
+model_Exp_4_age_41_60 <- lm(data = Data_Exp4_rep_age_41_60, bonus ~ excuse+male+race+hisp+education+partisan)
+summary(model_Exp_4_age_41_60) # excuse coefficient here very high
+model_Exp_4_age_over_60 <- lm(data = Data_Exp4_rep_over_60, bonus ~ excuse+male+race+hisp+education+partisan) 
+summary(model_Exp_4_age_over_60) # excuse coefficient here very high
+
+# There seems to be noticeable heterogeneity based on age, old people more likely to do bonus payment.
+
+Exp4_index_white <- which(Data_Exp4_rep$white == 1)
+Exp4_index_non_white <- which(Data_Exp4_rep$white == 0)
+
+model_Exp_4_white <- lm(data = Data_Exp4_rep[Exp4_index_white,], formula = bonus ~ excuse+age+I(age^2)+male+education+partisan)
+summary(model_Exp_4_white)
+
+model_Exp_4_non_white <- lm(data = Data_Exp4_rep[Exp4_index_non_white,], formula = bonus ~ excuse+age+I(age^2)+male+education+partisan)
+summary(model_Exp_4_non_white)
+
+# Non_white excuse coefficient noticeably bigger 
+
+Data_Exp4_rep$academic <- 0
+
+which(Data_Exp4_rep$education == "Bachelor's degree in college (4-year)")
+which(Data_Exp4_rep$education == "Master's degree")
+which(Data_Exp4_rep$education == "Doctoral degree")
+
+Data_Exp4_rep$academic[which(Data_Exp4_rep$education == "Bachelor's degree in college (4-year)")] <- 1
+Data_Exp4_rep$academic[which(Data_Exp4_rep$education == "Master's degree")] <- 1
+Data_Exp4_rep$academic[which(Data_Exp4_rep$education == "Doctoral degree")] <- 1
+
+Exp_4_index_academic <- which(Data_Exp4_rep$academic == 1)
+Exp_4_index_non_academic <- which(Data_Exp4_rep$academic == 0)
+
+model_Exp_4_academic <- lm(data = Data_Exp4_rep[Exp_4_index_academic,], formula = bonus ~ excuse+age+I(age^2)+male+race+hisp+partisan)
+summary(model_Exp_4_academic)
+
+model_Exp_4_non_academic <- lm(data = Data_Exp4_rep[Exp_4_index_non_academic,], formula = bonus ~ excuse+age+I(age^2)+male+race+hisp+partisan)
+summary(model_Exp_4_non_academic)
+
+# No noticeable heterogeneity here based on academic level.
+
+
