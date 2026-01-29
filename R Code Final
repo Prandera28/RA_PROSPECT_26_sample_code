@@ -35,7 +35,7 @@ library(rjson)     # added this package to library to run the code without error
 ## Load Stata dataset for Experiment 1 ##
 
 data <- read_dta(file = file.choose()) # choose file "defund-sender-deidentified.dta" manually if needed
-data <- read_dta("data/raw/defund-sender-deidentified.dta")
+data <- read_dta("data/raw/defund-sender-deidentified.dta") # loading directly from the wd
 
 # Classify private support
 data$join <- ifelse(data$defunding_opposition == "Yes", 1, 0)
